@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, make_response, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, make_response, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
@@ -8,6 +8,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import pandas as pd
 import os
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.lib import colors
 from functools import wraps
 from io import BytesIO
 import secrets
@@ -47,6 +50,7 @@ def regex_test(text, pattern):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # admin, manager, employee
@@ -79,7 +83,7 @@ class User(UserMixin, db.Model):
         used_days = sum([(req.end_date - req.start_date).days + 1 for req in approved_leaves])
         return max(0, 30 - used_days)
     
-    def __repr__(self):
+    def _repr_(self):
         return f'<User {self.username}>'
 
 class LeaveRequest(db.Model):
@@ -106,7 +110,7 @@ class LeaveRequest(db.Model):
             'rejected': 'danger'
         }.get(self.status, 'secondary')
     
-    def __repr__(self):
+    def _repr_(self):
         return f'<LeaveRequest {self.id} - {self.status}>'
 
 class AuditLog(db.Model):
@@ -117,11 +121,12 @@ class AuditLog(db.Model):
     ip_address = db.Column(db.String(50), nullable=False)
     details = db.Column(db.Text, nullable=True)
     
-    def __repr__(self):
+    def _repr_(self):
         return f'<AuditLog {self.id} - {self.action}>'
 
 # Forms
 class RegistrationForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired(), Length(min=2, max=100)])
     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=20)])
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
@@ -129,6 +134,7 @@ class RegistrationForm(FlaskForm):
         DataRequired(), EqualTo('password', message='Passwords must match')
     ])
     role = SelectField('Role', choices=[
+        ('', '-- Select Role --'),
         ('employee', 'Employee'), 
         ('manager', 'Manager'), 
         ('admin', 'Admin')
@@ -194,7 +200,7 @@ def role_required(role):
         def decorated_function(*args, **kwargs):
             if not current_user.is_authenticated or current_user.role != role:
                 flash('Access denied. Insufficient permissions.', 'danger')
-                return redirect(url_for('auth.login'))
+                return redirect(url_for('login'))
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -219,18 +225,16 @@ def register():
     if form.validate_on_submit():
         user = User(
             username=form.username.data,
+            name=form.name.data,
             email=form.email.data,
             role=form.role.data,
             team=form.team.data if form.team.data else None
         )
         user.set_password(form.password.data)
-        
         db.session.add(user)
         db.session.commit()
-        
         flash(f'Registration successful! Welcome {user.username}. Please login.', 'success')
         return redirect(url_for('login'))
-    
     return render_template('auth/register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -250,12 +254,7 @@ def login():
             flash(f'Welcome back, {user.username}!', 'success')
             
             # Redirect based on role
-            if user.role == 'admin':
-                return redirect(url_for('admin_dashboard'))
-            elif user.role == 'manager':
-                return redirect(url_for('manager_dashboard'))
-            else:
-                return redirect(url_for('employee_dashboard'))
+            return redirect(url_for('dashboard'))
         else:
             flash('Invalid username or password.', 'danger')
     
@@ -352,19 +351,16 @@ def edit_leave(leave_id):
     
     return render_template('employee/edit_leave.html', form=form, leave_request=leave_request)
 
-@app.route('/employee/cancel-leave/<int:leave_id>')
+@app.route('/employee/cancel-leave/<int:leave_id>', methods=['POST'])
 @login_required
 def cancel_leave(leave_id):
     leave_request = LeaveRequest.query.get_or_404(leave_id)
-    
     # Check permissions
     if leave_request.user_id != current_user.id or leave_request.status != 'pending':
         flash('You can only cancel your own pending leave requests.', 'danger')
         return redirect(url_for('employee_dashboard'))
-    
     db.session.delete(leave_request)
     db.session.commit()
-    
     log_action(f'Cancelled leave request #{leave_id}')
     flash('Leave request cancelled successfully!', 'info')
     return redirect(url_for('employee_dashboard'))
@@ -379,34 +375,34 @@ def manager_dashboard():
     
     # Get team leave requests
     if current_user.role == 'admin':
-        # Admin can see all requests - specify the join condition explicitly
-        leave_requests = LeaveRequest.query.join(User, LeaveRequest.user_id == User.id).order_by(LeaveRequest.applied_on.desc()).all()
+        # Admin can see all requests
+        query = LeaveRequest.query.join(User, LeaveRequest.user_id == User.id)
     else:
-        # Manager sees requests from their team - specify the join condition explicitly
-        leave_requests = LeaveRequest.query.join(User, LeaveRequest.user_id == User.id).filter(
+        # Manager sees requests from their team
+        query = LeaveRequest.query.join(User, LeaveRequest.user_id == User.id).filter(
             User.team == current_user.team,
             User.role == 'employee'
-        ).order_by(LeaveRequest.applied_on.desc()).all()
+        )
     
     # Apply filters
     status_filter = request.args.get('status', '')
     employee_filter = request.args.get('employee', '')
     start_date_filter = request.args.get('start_date', '')
     end_date_filter = request.args.get('end_date', '')
-    
+
     if status_filter:
-        leave_requests = [r for r in leave_requests if r.status == status_filter]
-    
+        query = query.filter(LeaveRequest.status == status_filter)
+
     if employee_filter:
-        leave_requests = [r for r in leave_requests if employee_filter.lower() in r.employee.username.lower()]
-    
+        query = query.filter(User.username.ilike(f'%{employee_filter}%'))
+
     if start_date_filter:
         start_date = datetime.strptime(start_date_filter, '%Y-%m-%d').date()
-        leave_requests = [r for r in leave_requests if r.start_date >= start_date]
-    
+        query = query.filter(LeaveRequest.start_date >= start_date)
+
     if end_date_filter:
         end_date = datetime.strptime(end_date_filter, '%Y-%m-%d').date()
-        leave_requests = [r for r in leave_requests if r.end_date <= end_date]
+        query = query.filter(LeaveRequest.end_date <= end_date)
     
     # Get team employees for filter dropdown
     if current_user.role == 'admin':
@@ -414,6 +410,8 @@ def manager_dashboard():
     else:
         team_employees = User.query.filter_by(team=current_user.team, role='employee').all()
     
+    leave_requests = query.order_by(LeaveRequest.applied_on.desc()).all()
+
     return render_template('manager/dashboard.html', 
                          leave_requests=leave_requests,
                          team_employees=team_employees,
@@ -484,7 +482,6 @@ def admin_dashboard():
         team_stats.append({'name': team_name, 'requests': team_requests})
     
     # Get recent activity
-    recent_requests = LeaveRequest.query.order_by(LeaveRequest.applied_on.desc()).limit(5).all()
     recent_logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(10).all()
     
     return render_template('admin/dashboard_new.html',
@@ -497,7 +494,6 @@ def admin_dashboard():
                          rejected_requests=rejected_requests,
                          approval_rate=approval_rate,
                          team_stats=team_stats,
-                         recent_requests=recent_requests,
                          recent_logs=recent_logs)
 
 @app.route('/admin/users')
@@ -513,38 +509,72 @@ def admin_users():
 def add_user():
     form = RegistrationForm()
     if form.validate_on_submit():
+        # Extra password match check (should be handled by EqualTo, but double check)
+        if form.password.data != form.confirm_password.data:
+            form.confirm_password.errors.append('Passwords must match.')
+            return render_template('admin/add_user.html', form=form)
         user = User(
+            name=form.name.data,
             username=form.username.data,
             email=form.email.data,
             role=form.role.data,
-            team=form.team.data if form.team.data else None
+            team=form.team.data if form.team.data else None,
+            is_active=True
         )
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        
         log_action(f'Added new user: {user.username} ({user.role})')
         flash(f'User {user.username} added successfully!', 'success')
         return redirect(url_for('admin_users'))
-    
+    # If not valid, preserve input and show errors
     return render_template('admin/add_user.html', form=form)
 
-@app.route('/admin/delete-user/<int:user_id>')
+@app.route('/admin/delete-user/<int:user_id>', methods=['POST'])
 @login_required
 @role_required('admin')
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
-    
     if user.id == current_user.id:
         flash('You cannot delete your own account.', 'danger')
         return redirect(url_for('admin_users'))
-    
-    # Soft delete by deactivating
-    user.is_active = False
+    try:
+        user.is_active = False
+        db.session.commit()
+        log_action(f'Soft deleted user: {user.username} ({user.role})')
+        flash(f'User {user.username} deactivated successfully!', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error deactivating user. Please try again.', 'danger')
+    return redirect(url_for('admin_users'))
+# Reactivate user route
+@app.route('/admin/reactivate-user/<int:user_id>', methods=['POST'])
+@login_required
+@role_required('admin')
+def reactivate_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.is_active:
+        flash('User is already active.', 'info')
+        return redirect(url_for('admin_users'))
+    user.is_active = True
     db.session.commit()
-    
-    log_action(f'Deactivated user: {user.username} ({user.role})')
-    flash(f'User {user.username} deactivated successfully!', 'info')
+    log_action(f'Reactivated user: {user.username} ({user.role})')
+    flash(f'User {user.username} reactivated successfully!', 'success')
+    return redirect(url_for('admin_users'))
+# Update user role route
+@app.route('/admin/update-role/<int:user_id>', methods=['POST'])
+@login_required
+@role_required('admin')
+def update_role(user_id):
+    user = User.query.get_or_404(user_id)
+    new_role = request.form.get('role')
+    if new_role not in ['admin', 'manager', 'employee']:
+        flash('Invalid role selected.', 'danger')
+        return redirect(url_for('admin_users'))
+    user.role = new_role
+    db.session.commit()
+    log_action(f'Changed role for user {user.username} to {new_role}')
+    flash(f'Role updated for {user.username} to {new_role.title()}.', 'success')
     return redirect(url_for('admin_users'))
 
 @app.route('/admin/audit-logs')
@@ -673,13 +703,59 @@ def export_csv():
     response.headers['Content-Disposition'] = 'attachment; filename=leave_requests.csv'
     return response
 
+@app.route('/admin/export/pdf')
+@login_required
+@role_required('admin')
+def export_pdf():
+    """Generates a PDF file of all leave requests."""
+    # Fetch all leave requests
+    leave_requests = LeaveRequest.query.order_by(LeaveRequest.applied_on.desc()).all()
+
+    # Create a PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+
+    # Table Header
+    data = [['ID', 'Employee', 'Start Date', 'End Date', 'Days', 'Status', 'Applied']]
+    
+    # Table Data
+    for req in leave_requests:
+        data.append([
+            req.id,
+            req.employee.username,
+            req.start_date.strftime('%Y-%m-%d'),
+            req.end_date.strftime('%Y-%m-%d'),
+            req.days_count,
+            req.status.title(),
+            req.applied_on.strftime('%Y-%m-%d')
+        ])
+
+    # Create Table Style
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F5D75')), # A nice dark blue/grey
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ])
+
+    table = Table(data)
+    table.setStyle(style)
+    elements.append(table)
+    doc.build(elements)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name='leave_requests.pdf', mimetype='application/pdf')
+
 # Initialize database and create tables
 def init_db():
     with app.app_context():
         db.create_all()
         print("✅ Database tables created successfully!")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     init_db()
     print("🚀 Employee Leave Management System starting...")
     print("📊 You can view the SQLite database using DB Browser for SQLite")

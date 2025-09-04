@@ -10,7 +10,7 @@
 
 1. **Navigate to the project directory:**
    ```bash
-   cd "C:\Desktop\python works\employee-Leave-MS"
+   cd "D:\employee-Leave-MS"
    ```
 
 2. **Activate the virtual environment:**

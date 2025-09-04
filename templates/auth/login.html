@@ -31,7 +31,7 @@
 
                         <div class="mb-3">
                             {{ form.password.label(class="form-label") }}
-                            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
+                            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), id="password") }}
                             {% if form.password.errors %}
                                 <div class="invalid-feedback">
                                     {% for error in form.password.errors %}

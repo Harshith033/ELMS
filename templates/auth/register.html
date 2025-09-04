@@ -116,6 +116,19 @@
             <p>Join the Employee Leave Management System</p>
         </div>
 
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="mb-3">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
         <div class="role-info">
             <h6><i class="fas fa-info-circle"></i> Role Information</h6>
             <ul>
@@ -125,10 +138,23 @@
             </ul>
         </div>
 
-        <form method="POST" id="registrationForm">
+        <form method="POST" action="{{ url_for('register') }}" id="registrationForm" novalidate>
             {{ form.hidden_tag() }}
             
             <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Enter your full name") }}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
                 <div class="col-md-6">
                     <div class="form-group">
                         {{ form.username.label(class="form-label") }}
@@ -142,8 +168,7 @@
                         {% endif %}
                     </div>
                 </div>
-                
-                <div class="col-md-6">
+                <div class="col-12">
                     <div class="form-group">
                         {{ form.email.label(class="form-label") }}
                         {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="Enter email address") }}
@@ -162,7 +187,7 @@
                 <div class="col-md-6">
                     <div class="form-group">
                         {{ form.password.label(class="form-label") }}
-                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="Enter password") }}
+                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), id="password", placeholder="Enter password") }}
                         <div class="password-strength">
                             <i class="fas fa-lock"></i> Minimum 6 characters required
                         </div>
@@ -179,7 +204,7 @@
                 <div class="col-md-6">
                     <div class="form-group">
                         {{ form.confirm_password.label(class="form-label") }}
-                        {{ form.confirm_password(class="form-control" + (" is-invalid" if form.confirm_password.errors else ""), placeholder="Confirm password") }}
+                        {{ form.confirm_password(class="form-control" + (" is-invalid" if form.confirm_password.errors else ""), id="confirm_password", placeholder="Confirm password") }}
                         {% if form.confirm_password.errors %}
                             <div class="invalid-feedback">
                                 {% for error in form.confirm_password.errors %}
@@ -222,7 +247,7 @@
             </div>
             
             <div class="form-group">
-                {{ form.submit(class="btn btn-primary btn-register w-100") }}
+                {{ form.submit(class="btn btn-primary btn-register w-100", value="Create Account") }}
             </div>
         </form>
 
@@ -290,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('registrationForm');
     const submitBtn = form.querySelector('button[type="submit"]');
     
-    form.addEventListener('submit', function() {
+    form.addEventListener('submit', function(e) {
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Account...';
         submitBtn.disabled = true;
     });

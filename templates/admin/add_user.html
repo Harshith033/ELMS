@@ -11,14 +11,39 @@
                     <h5 class="mb-0"><i class="bi bi-person-plus"></i> Add New User</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST">
+                    {% if form.errors %}
+                        <div class="alert alert-danger">
+                            <strong>Please correct the errors below:</strong>
+                            <ul class="mb-0">
+                                {% for field, errors in form.errors.items() %}
+                                    {% for error in errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                    <form method="POST" novalidate>
                         {{ form.hidden_tag() }}
                         
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
+                                    {{ form.username.label(class="form-label") }}
+                                    {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), placeholder="Enter username") }}
+                                    {% if form.username.errors %}
+                                        <div class="invalid-feedback">
+                                            {% for error in form.username.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
                                     {{ form.name.label(class="form-label") }}
-                                    {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                                    {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Enter full name") }}
                                     {% if form.name.errors %}
                                         <div class="invalid-feedback">
                                             {% for error in form.name.errors %}
@@ -29,7 +54,7 @@
                                 </div>
                             </div>
                             
-                            <div class="col-md-6">
+                            <div class="col-md-12">
                                 <div class="mb-3">
                                     {{ form.email.label(class="form-label") }}
                                     {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
@@ -48,15 +73,23 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     {{ form.password.label(class="form-label") }}
-                                    {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
+                                    {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="Enter password") }}
                                     {% if form.password.errors %}
                                         <div class="invalid-feedback">
-                                            {% for error in form.password.errors %}
-                                                {{ error }}
-                                            {% endfor %}
+                                            {% for error in form.password.errors %}{{ error }}{% endfor %}
                                         </div>
+                                    {% else %}
+                                        <div class="form-text">Minimum 6 characters. For security, you must re-enter the password if other fields have errors.</div>
                                     {% endif %}
-                                    <div class="form-text">Minimum 6 characters</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    {{ form.confirm_password.label(class="form-label") }}
+                                    {{ form.confirm_password(class="form-control" + (" is-invalid" if form.confirm_password.errors else ""), placeholder="Confirm password") }}
+                                    {% if form.confirm_password.errors %}
+                                        <div class="invalid-feedback">{% for error in form.confirm_password.errors %}{{ error }}{% endfor %}</div>
+                                    {% endif %}
                                 </div>
                             </div>
                             

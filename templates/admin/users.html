@@ -76,11 +76,27 @@
                                         <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
                                         <td>
                                             {% if user.id != current_user.id %}
-                                                <a href="{{ url_for('delete_user', user_id=user.id) }}" 
-                                                   class="btn btn-sm btn-outline-danger"
-                                                   onclick="return confirm('Are you sure you want to delete {{ user.name }}? This action cannot be undone.')">
-                                                    <i class="bi bi-trash"></i> Delete
-                                                </a>
+                                                {% if user.is_active %}
+                                                    <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}" style="display:inline;">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to deactivate {{ user.name }}?');">
+                                                            <i class="bi bi-trash"></i> Deactivate
+                                                        </button>
+                                                    </form>
+                                                {% else %}
+                                                    <form method="POST" action="{{ url_for('reactivate_user', user_id=user.id) }}" style="display:inline;">
+                                                        <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Reactivate {{ user.name }}?');">
+                                                            <i class="bi bi-arrow-repeat"></i> Reactivate
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                                <!-- Role change dropdown -->
+                                                <form method="POST" action="{{ url_for('update_role', user_id=user.id) }}" style="display:inline; margin-left:5px;">
+                                                    <select name="role" class="form-select form-select-sm d-inline w-auto" onchange="this.form.submit()">
+                                                        <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                                                        <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
+                                                        <option value="employee" {% if user.role == 'employee' %}selected{% endif %}>Employee</option>
+                                                    </select>
+                                                </form>
                                             {% else %}
                                                 <span class="text-muted small">Current User</span>
                                             {% endif %}

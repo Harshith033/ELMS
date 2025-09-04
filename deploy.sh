@@ -32,7 +32,12 @@ pip install -r requirements.txt
 # Create .env file if it doesn't exist
 if [ ! -f ".env" ]; then
     echo "📝 Creating .env file from template..."
-    cp .env.template .env
+    # Generate a default secret key for development
+    SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(16))')
+    
+    # Create .env file with content from .env.template and add the secret key
+    (cat .env.template; echo "SECRET_KEY=$SECRET_KEY") > .env
+
     echo "⚠️ Please update .env file with your actual configuration values"
 else
     echo "✓ .env file already exists"
@@ -40,12 +45,7 @@ fi
 
 # Initialize database
 echo "🗄️ Initializing database..."
-python -c "
-from app import app, db
-with app.app_context():
-    db.create_all()
-    print('✓ Database initialized successfully')
-"
+flask --app app_new init-db
 
 # Run the application
 echo ""
@@ -61,4 +61,4 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-python app.py
+python app_new.py
