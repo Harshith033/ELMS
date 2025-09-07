@@ -250,12 +250,13 @@
                                                    class="btn btn-outline-primary btn-action" title="Edit Request">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
-                                                <a href="{{ url_for('cancel_leave', leave_id=request.id) }}" 
-                                                   class="btn btn-outline-danger btn-action" 
-                                                   title="Cancel Request"
-                                                   onclick="return confirm('Are you sure you want to cancel this leave request?')">
-                                                    <i class="fas fa-trash"></i>
-                                                </a>
+                                                <form action="{{ url_for('cancel_leave', leave_id=request.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to cancel this leave request?');">
+                                                    <button type="submit"
+                                                       class="btn btn-outline-danger btn-action" 
+                                                       title="Cancel Request">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
                                             {% else %}
                                                 <span class="text-muted">
                                                     <i class="fas fa-lock"></i> Finalized

@@ -58,7 +58,7 @@ pip install -r requirements.txt
 
 ```bash
 # Run the Flask application
-python app.py
+python app_new.py
 ```
 
 The application will start on `http://localhost:5000`

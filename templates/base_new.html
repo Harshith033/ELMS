@@ -50,25 +50,19 @@
                                 <a class="nav-link" href="{{ url_for('apply_leave') }}">
                                     <i class="fas fa-plus"></i> Apply Leave
                                 </a>
-                            </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('audit_logs') }}">
-                                        <i class="fas fa-history"></i> Audit Logs
-                                    </a>
-                                </li>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('admin_users') }}">
-                                    <i class="fas fa-users"></i> Users
+                            </li>                           
+                        {% elif current_user.role == 'admin' %}
+                             <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin_dashboard') }}">
+                                    <i class="fas fa-cog"></i> Admin Dashboard
                                 </a>
                             </li>
-                            {% if current_user.role == 'manager' %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('manager_dashboard') }}">
-                                    <i class="fas fa-tasks"></i> Leave Requests
-                                </a>
+                             <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin_users') }}"><i class="fas fa-users"></i> Users</a>
                             </li>
-                            {% endif %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('audit_logs') }}"><i class="fas fa-history"></i> Audit Logs</a>
+                            </li>
                         {% endif %}
                     {% endif %}
                 </ul>
